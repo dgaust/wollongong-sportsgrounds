@@ -1,5 +1,8 @@
 # Wollongong Sportsgrounds
 
+[![Validate](https://github.com/dgaust/wollongong-sportsgrounds/actions/workflows/validate.yml/badge.svg)](https://github.com/dgaust/wollongong-sportsgrounds/actions/workflows/validate.yml)
+[![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
+
 A Home Assistant custom integration that reports whether a Wollongong City
 Council sportsground is open. It reads the public
 [sportsgrounds status page](https://wollongong.nsw.gov.au/places/sport-and-fitness/sportsgrounds)
