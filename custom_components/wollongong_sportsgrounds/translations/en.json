@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a sportsground",
+        "description": "Choose the Wollongong sportsground to monitor. Add the integration again to monitor another ground.",
+        "data": {
+          "ground": "Sportsground"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not fetch the sportsgrounds list from Council. Check your connection and try again.",
+      "unknown": "That sportsground is no longer listed. Reload and try again."
+    },
+    "abort": {
+      "already_configured": "This sportsground is already being monitored."
+    }
+  }
+}

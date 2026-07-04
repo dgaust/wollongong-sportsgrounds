@@ -1,0 +1,12 @@
+{
+  "domain": "wollongong_sportsgrounds",
+  "name": "Wollongong Sportsgrounds",
+  "codeowners": ["@dgaust"],
+  "config_flow": true,
+  "documentation": "https://github.com/dgaust/wollongong-sportsgrounds",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/dgaust/wollongong-sportsgrounds/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
