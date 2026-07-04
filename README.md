@@ -19,6 +19,10 @@ For each configured ground you get one device with:
 - **Status sensor** — the status text exactly as Council publishes it
   (`Open`, `Closed`, `Partially Closed`, …). Use this when you need the precise
   wording rather than a yes/no.
+- **Status last changed sensor** — a timestamp of when *Council* last changed
+  the ground's status (from the ground's "See details" page), not when this
+  integration polled. Council inspects grounds daily; if this isn't today's
+  date it just means the status hasn't changed since their last inspection.
 
 > The binary sensor is deliberately strict: it's only `on` for a plain "Open".
 > If you want to treat "Partially Closed" as playable, read the **Status
@@ -46,8 +50,9 @@ Council page) and submit. Repeat to add more grounds.
 
 ## How it works
 
-- All configured grounds share **one** coordinator, so the Council page is
-  fetched once every 15 minutes regardless of how many grounds you monitor.
+- All configured grounds share **one** coordinator. Each poll (every 15
+  minutes) fetches the listing page once for every ground's status, plus each
+  configured ground's detail page for its "status last changed" time.
 - The page is server-rendered HTML; the integration parses it directly (no
   browser, no API key). If Council changes the page markup the entities go
   unavailable rather than reporting stale data.

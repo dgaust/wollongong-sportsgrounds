@@ -12,7 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import CONF_GROUND, DOMAIN
 from .coordinator import SportsgroundsCoordinator
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -26,13 +26,20 @@ async def async_setup_entry(
     """Set up a sportsground from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {"coordinator": None, "entries": set()})
 
+    slug = entry.data[CONF_GROUND]
     coordinator: SportsgroundsCoordinator | None = domain_data["coordinator"]
     if coordinator is None:
         coordinator = SportsgroundsCoordinator(hass)
+        coordinator.register_ground(slug)
         # Raises ConfigEntryNotReady on failure; the entry is retried later and
         # the coordinator stays unset so the next attempt recreates it.
         await coordinator.async_config_entry_first_refresh()
         domain_data["coordinator"] = coordinator
+    else:
+        # An extra ground joins the shared coordinator; refresh so its detail
+        # page (last-changed time) is fetched now rather than at the next poll.
+        coordinator.register_ground(slug)
+        await coordinator.async_refresh()
 
     domain_data["entries"].add(entry.entry_id)
     entry.runtime_data = coordinator
@@ -48,6 +55,8 @@ async def async_unload_entry(
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok and (domain_data := hass.data.get(DOMAIN)):
         domain_data["entries"].discard(entry.entry_id)
+        if coordinator := domain_data["coordinator"]:
+            coordinator.unregister_ground(entry.data[CONF_GROUND])
         if not domain_data["entries"]:
             domain_data["coordinator"] = None
     return unload_ok
