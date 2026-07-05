@@ -25,7 +25,8 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 CARD_FILENAME = "wollongong-sportsground-card.js"
-CARD_URL = f"/{DOMAIN}/{CARD_FILENAME}"
+WWW_URL_BASE = f"/{DOMAIN}"
+CARD_URL = f"{WWW_URL_BASE}/{CARD_FILENAME}"
 
 type SportsgroundsConfigEntry = ConfigEntry[SportsgroundsCoordinator]
 
@@ -36,10 +37,12 @@ async def _async_register_card(hass: HomeAssistant) -> None:
     if domain_data.get("card_registered"):
         return
 
-    card_path = Path(__file__).parent / "www" / CARD_FILENAME
+    www_dir = Path(__file__).parent / "www"
     try:
+        # Serve the whole www folder so both the card JS and its default
+        # background image are reachable under /wollongong_sportsgrounds/.
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(CARD_URL, str(card_path), False)]
+            [StaticPathConfig(WWW_URL_BASE, str(www_dir), False)]
         )
         # Cache-bust so a card upgrade is picked up without a manual hard-refresh.
         add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")

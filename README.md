@@ -70,15 +70,16 @@ image: /local/grounds/cawley.jpg       # optional background image
 | Option | Default | Description |
 |---|---|---|
 | `entity` | *(required)* | The ground's **binary_sensor** (on = open). |
-| `image` | *(none)* | Background image URL. Put files in `config/www/…` and reference them as `/local/…`. |
+| `image` | built-in photo | Background image URL. Leave blank to use the bundled ground photo, `none` for your theme's card colours, or point to your own (put files in `config/www/…` and reference them as `/local/…`). |
 | `name` | Entity name | Heading override. |
 | `show_updated` | `true` | Show Council's "status last changed" time. |
 | `status_entity` | auto | The text **Status** sensor. Auto-discovered from the same device. |
 | `updated_entity` | auto | The **Status last changed** sensor. Auto-discovered from the same device. |
 
 The card auto-discovers the sibling **Status** and **Status last changed**
-sensors from the same device, so normally you only set `entity` (and `image`).
-With no image it falls back to your theme's card colours. The served card URL is
+sensors from the same device, so normally you only set `entity`. It ships with a
+default ground background photo, so it looks good out of the box; set `image` to
+override it or `image: none` for your theme's card colours. The served card URL is
 cache-busted per version, so upgrades are picked up without a manual
 hard-refresh; you can confirm the `WOLLONGONG-SPORTSGROUND-CARD` version banner
 in the browser console.

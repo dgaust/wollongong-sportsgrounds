@@ -18,7 +18,12 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
+
+// Shipped with the integration and served from the same static route. Used as
+// the background when the card has no `image` set. Set `image: none` to opt out.
+const DEFAULT_IMAGE =
+  "/wollongong_sportsgrounds/default-background.jpg?v=" + CARD_VERSION;
 
 class WollongongSportsgroundCard extends HTMLElement {
   static getConfigElement() {
@@ -176,9 +181,16 @@ class WollongongSportsgroundCard extends HTMLElement {
       (st && st.attributes && st.attributes.friendly_name) ||
       cfg.entity;
 
-    // Background image.
-    els.card.classList.toggle("wsg-has-image", !!cfg.image);
-    els.bg.style.backgroundImage = cfg.image ? `url("${cfg.image}")` : "";
+    // Background image: use the configured image, fall back to the shipped
+    // default, or `image: none` to keep the theme's card background.
+    let image;
+    if (cfg.image === "none") {
+      image = "";
+    } else {
+      image = cfg.image || DEFAULT_IMAGE;
+    }
+    els.card.classList.toggle("wsg-has-image", !!image);
+    els.bg.style.backgroundImage = image ? `url("${image}")` : "";
 
     // Greyscale whenever the ground is not open (closed / partial / unavailable).
     els.card.classList.toggle("wsg-grey", !open);
@@ -291,7 +303,8 @@ class WollongongSportsgroundCardEditor extends HTMLElement {
         })[s.name] || s.name;
       this._form.computeHelper = (s) =>
         ({
-          image: "e.g. /local/grounds/cawley.jpg",
+          image:
+            "Leave blank for the built-in ground photo, 'none' for your theme colours, or e.g. /local/grounds/cawley.jpg",
         })[s.name] || "";
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
