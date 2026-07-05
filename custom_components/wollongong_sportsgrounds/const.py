@@ -23,7 +23,7 @@ MANUFACTURER = "Wollongong City Council"
 
 # Bumped on every change to the Lovelace card; used as a cache-busting query
 # on the served card URL so upgrades don't need a manual hard-refresh.
-CARD_VERSION = "1.4.0"
+CARD_VERSION = "1.5.0"
 
 # The binary sensor reports "open" only when the status text is exactly this.
 # Anything else — Closed, Partially Closed, Closed at request of club — counts

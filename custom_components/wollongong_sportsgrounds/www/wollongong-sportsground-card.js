@@ -18,12 +18,29 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.4.0";
+const CARD_VERSION = "1.5.0";
 
 // Shipped with the integration and served from the same static route. Used as
-// the background when the card has no `image` set. Set `image: none` to opt out.
+// the background when the card has no `image` set (full layout). `image: none`
+// opts out; `image: field` (and the compact layout) use the drawn pitch below.
 const DEFAULT_IMAGE =
   "/wollongong_sportsgrounds/default-background.jpg?v=" + CARD_VERSION;
+
+// A drawn soccer pitch (no photo), used by the compact layout and `image: field`.
+const FIELD_SVG =
+  "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='160' preserveAspectRatio='xMidYMid slice'>" +
+  "<rect width='320' height='160' fill='#3c8a3c'/>" +
+  "<g fill='#409140'><rect x='0' width='53' height='160'/><rect x='107' width='53' height='160'/><rect x='213' width='53' height='160'/></g>" +
+  "<g fill='none' stroke='#ffffff' stroke-width='2.4' opacity='0.85'>" +
+  "<rect x='8' y='8' width='304' height='144' rx='2'/>" +
+  "<line x1='160' y1='8' x2='160' y2='152'/>" +
+  "<circle cx='160' cy='80' r='24'/>" +
+  "<rect x='8' y='40' width='40' height='80'/><rect x='8' y='58' width='16' height='44'/>" +
+  "<rect x='272' y='40' width='40' height='80'/><rect x='296' y='58' width='16' height='44'/>" +
+  "</g>" +
+  "<g fill='#ffffff' opacity='0.85'><circle cx='160' cy='80' r='2.2'/><circle cx='40' cy='80' r='2'/><circle cx='280' cy='80' r='2'/></g>" +
+  "</svg>";
+const FIELD_IMAGE = "data:image/svg+xml," + encodeURIComponent(FIELD_SVG);
 
 class WollongongSportsgroundCard extends HTMLElement {
   static getConfigElement() {
@@ -122,6 +139,26 @@ class WollongongSportsgroundCard extends HTMLElement {
         }
         .wsg-name { font-size: 1rem; font-weight: 600; color: var(--primary-text-color); }
         .wsg-updated { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 2px; }
+        /* Compact: short single row over the drawn pitch, no bottom bar. */
+        ha-card.wsg.wsg-compact { min-height: 48px; }
+        .wsg-compact .wsg-bar {
+          top: 0;
+          display: flex;
+          align-items: center;
+          background: transparent;
+          padding: 8px 12px;
+        }
+        .wsg-compact .wsg-updated { display: none; }
+        .wsg-compact .wsg-name {
+          color: #fff;
+          font-weight: 600;
+          padding-right: 104px;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .wsg-compact .wsg-badge { top: 50%; transform: translateY(-50%); }
       </style>
       <div class="wsg-bg"></div>
       <span class="wsg-badge"></span>
@@ -168,17 +205,21 @@ class WollongongSportsgroundCard extends HTMLElement {
       (st && st.attributes && st.attributes.friendly_name) ||
       cfg.entity;
 
-    // Background image: use the configured image, fall back to the shipped
-    // default, or `image: none` to keep the theme's card background.
+    els.card.classList.toggle("wsg-compact", !!cfg.compact);
+
+    // Background: explicit image wins; `none` = theme colours; `field` = the
+    // drawn pitch; otherwise the default (photo for full, pitch for compact).
     let image;
     if (cfg.image === "none") {
       image = "";
+    } else if (cfg.image === "field") {
+      image = FIELD_IMAGE;
     } else {
-      image = cfg.image || DEFAULT_IMAGE;
+      image = cfg.image || (cfg.compact ? FIELD_IMAGE : DEFAULT_IMAGE);
     }
     els.bg.style.backgroundImage = image ? `url("${image}")` : "";
 
-    // Greyscale (photo only) whenever the ground is not open.
+    // Greyscale (background only) whenever the ground is not open.
     els.card.classList.toggle("wsg-grey", !open);
 
     els.name.textContent = name;
@@ -265,6 +306,7 @@ class WollongongSportsgroundCardEditor extends HTMLElement {
       },
       { name: "name", selector: { text: {} } },
       { name: "image", selector: { text: {} } },
+      { name: "compact", selector: { boolean: {} } },
       { name: "show_updated", selector: { boolean: {} } },
     ];
   }
@@ -284,13 +326,15 @@ class WollongongSportsgroundCardEditor extends HTMLElement {
         ({
           entity: "Ground (binary sensor)",
           name: "Name (optional)",
-          image: "Background image URL (optional)",
+          image: "Background (optional)",
+          compact: "Compact layout",
           show_updated: "Show 'last changed' time",
         })[s.name] || s.name;
       this._form.computeHelper = (s) =>
         ({
           image:
-            "Leave blank for the built-in ground photo, 'none' for your theme colours, or e.g. /local/grounds/cawley.jpg",
+            "Blank = default (photo, or drawn pitch when compact); 'field' = drawn pitch; 'none' = theme colours; or a URL like /local/grounds/cawley.jpg",
+          compact: "Shorter card with a drawn soccer pitch background",
         })[s.name] || "";
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();

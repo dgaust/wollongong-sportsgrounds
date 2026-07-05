@@ -75,9 +75,10 @@ image: /local/grounds/cawley.jpg       # optional background image
 | Option | Default | Description |
 |---|---|---|
 | `entity` | *(required)* | The ground's **binary_sensor** (on = open). |
-| `image` | built-in photo | Background image URL. Leave blank to use the bundled ground photo, `none` for your theme's card colours, or point to your own (put files in `config/www/…` and reference them as `/local/…`). |
+| `image` | built-in photo | Background. Blank = the bundled ground photo (full) or the drawn pitch (compact); `field` = the drawn soccer pitch; `none` = your theme's card colours; or a URL (put files in `config/www/…` and reference them as `/local/…`). |
+| `compact` | `false` | Shorter single-row card with a generated soccer-pitch background (no photo). |
 | `name` | Entity name | Heading override. |
-| `show_updated` | `true` | Show Council's "status last changed" time. |
+| `show_updated` | `true` | Show Council's "status last changed" time (hidden in compact). |
 | `status_entity` | auto | The text **Status** sensor. Auto-discovered from the same device. |
 | `updated_entity` | auto | The **Status last changed** sensor. Auto-discovered from the same device. |
 
