@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set. Set `image: none` to opt out.
@@ -125,13 +125,15 @@ class WollongongSportsgroundCard extends HTMLElement {
           font-size: 0.78rem;
           text-transform: uppercase;
           letter-spacing: 0.04em;
-          color: #fff;
-          background: var(--disabled-color, #757575);
+          color: var(--text-primary-color, #fff);
+          background: var(--disabled-color, #9e9e9e);
           white-space: nowrap;
         }
-        .wsg-badge.wsg-open { background: #2e7d32; }
-        .wsg-badge.wsg-closed { background: #c62828; }
-        .wsg-updated { font-size: 0.8rem; opacity: 0.85; }
+        /* Honour the theme's primary/accent colours; green/red are fallbacks. */
+        .wsg-badge.wsg-open { background: var(--primary-color, #2e7d32); }
+        .wsg-badge.wsg-closed { background: var(--accent-color, #c62828); }
+        .wsg-updated { font-size: 0.8rem; color: var(--secondary-text-color); }
+        ha-card.wsg.wsg-has-image .wsg-updated { color: #fff; opacity: 0.85; }
       </style>
       <div class="wsg-bg"></div>
       <div class="wsg-overlay"></div>

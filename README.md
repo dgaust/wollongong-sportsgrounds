@@ -58,8 +58,11 @@ over an optional background image, and renders the **whole card in greyscale
 when the ground is not open**.
 
 The card's JavaScript is served and auto-loaded by the integration (no manual
-resource needed on a normal setup). It has a **visual editor** — add it from the
-dashboard card picker and pick a ground — or configure it in YAML:
+resource needed on a normal setup). It follows your Home Assistant theme — the
+open/closed badge uses your **primary**/**accent** colours and the text uses the
+**primary**/**secondary** text colours (with green/red as fallbacks). It has a
+**visual editor** — add it from the dashboard card picker and pick a ground — or
+configure it in YAML:
 
 ```yaml
 type: custom:wollongong-sportsground-card
