@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.4.0";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set. Set `image: none` to opt out.
@@ -78,10 +78,8 @@ class WollongongSportsgroundCard extends HTMLElement {
           position: relative;
           overflow: hidden;
           min-height: 140px;
-          display: flex;
-          transition: filter 300ms ease;
+          display: block;
         }
-        ha-card.wsg.wsg-grey { filter: grayscale(100%); }
         .wsg-bg {
           position: absolute;
           inset: 0;
@@ -89,36 +87,15 @@ class WollongongSportsgroundCard extends HTMLElement {
           background-size: cover;
           background-position: center;
           background-color: var(--ha-card-background, var(--card-background-color, #222));
+          transition: filter 300ms ease;
         }
-        .wsg-overlay {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
-          background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.65) 100%);
-          opacity: 0;
-          transition: opacity 200ms ease;
-        }
-        ha-card.wsg.wsg-has-image .wsg-overlay { opacity: 1; }
-        .wsg-content {
-          position: relative;
-          z-index: 2;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 16px;
-          width: 100%;
-          color: var(--primary-text-color);
-        }
-        ha-card.wsg.wsg-has-image .wsg-content { color: #fff; }
-        ha-card.wsg.wsg-has-image .wsg-name,
-        ha-card.wsg.wsg-has-image .wsg-updated {
-          text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-        }
-        .wsg-name { font-size: 1.15rem; font-weight: 600; }
-        .wsg-bottom { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        /* Closed: desaturate only the photo, leaving the badge, bar and text. */
+        ha-card.wsg.wsg-grey .wsg-bg { filter: grayscale(100%); }
         .wsg-badge {
-          display: inline-block;
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 2;
           padding: 4px 12px;
           border-radius: 999px;
           font-weight: 700;
@@ -132,17 +109,25 @@ class WollongongSportsgroundCard extends HTMLElement {
         /* Honour the theme's primary/accent colours; green/red are fallbacks. */
         .wsg-badge.wsg-open { background: var(--primary-color, #2e7d32); }
         .wsg-badge.wsg-closed { background: var(--accent-color, #c62828); }
-        .wsg-updated { font-size: 0.8rem; color: var(--secondary-text-color); }
-        ha-card.wsg.wsg-has-image .wsg-updated { color: #fff; opacity: 0.85; }
+        .wsg-bar {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+          padding: 10px 14px;
+          /* Theme card colour, slightly translucent so a hint of photo shows. */
+          background: var(--ha-card-background, var(--card-background-color, #fff));
+          background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #fff)) 88%, transparent);
+        }
+        .wsg-name { font-size: 1rem; font-weight: 600; color: var(--primary-text-color); }
+        .wsg-updated { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 2px; }
       </style>
       <div class="wsg-bg"></div>
-      <div class="wsg-overlay"></div>
-      <div class="wsg-content">
+      <span class="wsg-badge"></span>
+      <div class="wsg-bar">
         <div class="wsg-name"></div>
-        <div class="wsg-bottom">
-          <span class="wsg-badge"></span>
-          <span class="wsg-updated"></span>
-        </div>
+        <div class="wsg-updated"></div>
       </div>
     `;
     this.appendChild(card);
@@ -191,10 +176,9 @@ class WollongongSportsgroundCard extends HTMLElement {
     } else {
       image = cfg.image || DEFAULT_IMAGE;
     }
-    els.card.classList.toggle("wsg-has-image", !!image);
     els.bg.style.backgroundImage = image ? `url("${image}")` : "";
 
-    // Greyscale whenever the ground is not open (closed / partial / unavailable).
+    // Greyscale (photo only) whenever the ground is not open.
     els.card.classList.toggle("wsg-grey", !open);
 
     els.name.textContent = name;
