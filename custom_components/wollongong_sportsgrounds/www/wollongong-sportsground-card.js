@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.5.0";
+const CARD_VERSION = "1.6.0";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set (full layout). `image: none`
@@ -106,13 +106,29 @@ class WollongongSportsgroundCard extends HTMLElement {
           background-color: var(--ha-card-background, var(--card-background-color, #222));
           transition: filter 300ms ease;
         }
-        /* Closed: desaturate only the photo, leaving the badge, bar and text. */
+        /* Closed: desaturate only the background, leaving the bar and text. */
         ha-card.wsg.wsg-grey .wsg-bg { filter: grayscale(100%); }
-        .wsg-badge {
+        /* Frosted bar across the bottom: name/time on the left, status on the right. */
+        .wsg-bar {
           position: absolute;
-          top: 12px;
-          right: 12px;
+          left: 0;
+          right: 0;
+          bottom: 0;
           z-index: 2;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 10px 14px;
+          /* Theme card colour, slightly translucent so a hint of background shows. */
+          background: var(--ha-card-background, var(--card-background-color, #fff));
+          background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #fff)) 88%, transparent);
+        }
+        .wsg-text { flex: 1 1 auto; min-width: 0; }
+        .wsg-name { font-size: 1rem; font-weight: 600; color: var(--primary-text-color); }
+        .wsg-updated { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 2px; }
+        .wsg-badge {
+          flex: none;
           padding: 4px 12px;
           border-radius: 999px;
           font-weight: 700;
@@ -126,45 +142,25 @@ class WollongongSportsgroundCard extends HTMLElement {
         /* Honour the theme's primary/accent colours; green/red are fallbacks. */
         .wsg-badge.wsg-open { background: var(--primary-color, #2e7d32); }
         .wsg-badge.wsg-closed { background: var(--accent-color, #c62828); }
-        .wsg-bar {
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 1;
-          padding: 10px 14px;
-          /* Theme card colour, slightly translucent so a hint of photo shows. */
-          background: var(--ha-card-background, var(--card-background-color, #fff));
-          background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #fff)) 88%, transparent);
-        }
-        .wsg-name { font-size: 1rem; font-weight: 600; color: var(--primary-text-color); }
-        .wsg-updated { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 2px; }
-        /* Compact: short single row over the drawn pitch, no bottom bar. */
+        /* Compact: short row over a dimmed background; no last-changed line. */
         ha-card.wsg.wsg-compact { min-height: 48px; }
-        .wsg-compact .wsg-bar {
-          top: 0;
-          display: flex;
-          align-items: center;
-          background: transparent;
-          padding: 8px 12px;
-        }
+        .wsg-compact .wsg-bar { top: 0; background: rgba(0, 0, 0, 0.34); }
         .wsg-compact .wsg-updated { display: none; }
         .wsg-compact .wsg-name {
           color: #fff;
-          font-weight: 600;
-          padding-right: 104px;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .wsg-compact .wsg-badge { top: 50%; transform: translateY(-50%); }
       </style>
       <div class="wsg-bg"></div>
-      <span class="wsg-badge"></span>
       <div class="wsg-bar">
-        <div class="wsg-name"></div>
-        <div class="wsg-updated"></div>
+        <div class="wsg-text">
+          <div class="wsg-name"></div>
+          <div class="wsg-updated"></div>
+        </div>
+        <span class="wsg-badge"></span>
       </div>
     `;
     this.appendChild(card);

@@ -54,10 +54,11 @@ Council page) and submit. Repeat to add more grounds.
 ## Lovelace card
 
 The integration ships a small dependency-free card that shows a ground's status
-over a background image: a status pill in the top corner and a theme-coloured
-bar along the bottom with the ground name and last-changed time. When the ground
-is not open, **only the photo turns greyscale** — the pill, bar, and text keep
-their colour.
+over a background image, with a theme-coloured "frosted" bar along the bottom
+holding the ground name and last-changed time on the left and the status pill on
+the right. When the ground is not open, **only the background turns greyscale** —
+the bar, text, and pill keep their colour. A `compact` option gives a shorter
+single-row card over a generated soccer pitch.
 
 The card's JavaScript is served and auto-loaded by the integration (no manual
 resource needed on a normal setup). It follows your Home Assistant theme — the
