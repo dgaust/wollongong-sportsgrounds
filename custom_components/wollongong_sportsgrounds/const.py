@@ -21,6 +21,10 @@ DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
 
 MANUFACTURER = "Wollongong City Council"
 
+# Bumped on every change to the Lovelace card; used as a cache-busting query
+# on the served card URL so upgrades don't need a manual hard-refresh.
+CARD_VERSION = "1.1.0"
+
 # The binary sensor reports "open" only when the status text is exactly this.
 # Anything else — Closed, Partially Closed, Closed at request of club — counts
 # as not open. The raw wording is preserved by the status text sensor.

@@ -17,7 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_GROUND, DOMAIN
+from .const import CARD_VERSION, CONF_GROUND, DOMAIN
 from .coordinator import SportsgroundsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,7 +41,8 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         await hass.http.async_register_static_paths(
             [StaticPathConfig(CARD_URL, str(card_path), False)]
         )
-        add_extra_js_url(hass, CARD_URL)
+        # Cache-bust so a card upgrade is picked up without a manual hard-refresh.
+        add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")
         domain_data["card_registered"] = True
     except (RuntimeError, ValueError) as err:
         # Non-fatal: the integration still works, the card just isn't auto-served.

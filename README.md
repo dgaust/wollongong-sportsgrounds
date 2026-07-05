@@ -58,8 +58,8 @@ over an optional background image, and renders the **whole card in greyscale
 when the ground is not open**.
 
 The card's JavaScript is served and auto-loaded by the integration (no manual
-resource needed on a normal setup — just clear your browser cache after
-installing/upgrading). Add it to a dashboard:
+resource needed on a normal setup). It has a **visual editor** — add it from the
+dashboard card picker and pick a ground — or configure it in YAML:
 
 ```yaml
 type: custom:wollongong-sportsground-card
@@ -78,9 +78,10 @@ image: /local/grounds/cawley.jpg       # optional background image
 
 The card auto-discovers the sibling **Status** and **Status last changed**
 sensors from the same device, so normally you only set `entity` (and `image`).
-With no image it falls back to your theme's card colours. If the card doesn't
-appear after upgrading, hard-refresh the browser and confirm the
-`WOLLONGONG-SPORTSGROUND-CARD` version banner in the console.
+With no image it falls back to your theme's card colours. The served card URL is
+cache-busted per version, so upgrades are picked up without a manual
+hard-refresh; you can confirm the `WOLLONGONG-SPORTSGROUND-CARD` version banner
+in the browser console.
 
 ## How it works
 

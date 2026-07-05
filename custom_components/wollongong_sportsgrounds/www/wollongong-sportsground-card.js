@@ -18,11 +18,26 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 class WollongongSportsgroundCard extends HTMLElement {
-  static getStubConfig() {
-    return { entity: "", image: "", show_updated: true };
+  static getConfigElement() {
+    return document.createElement("wollongong-sportsground-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    // Default to the first Wollongong sportsground binary_sensor, if any.
+    let entity = "";
+    if (hass && hass.states) {
+      entity =
+        Object.keys(hass.states).find(
+          (e) =>
+            e.startsWith("binary_sensor.") &&
+            hass.states[e].attributes &&
+            hass.states[e].attributes.device_class === "opening"
+        ) || "";
+    }
+    return { entity, image: "", show_updated: true };
   }
 
   setConfig(config) {
@@ -221,6 +236,86 @@ class WollongongSportsgroundCard extends HTMLElement {
 }
 
 customElements.define("wollongong-sportsground-card", WollongongSportsgroundCard);
+
+/**
+ * Visual editor for the card. Uses HA's built-in <ha-form> with selectors, so
+ * it stays dependency-free while giving an entity picker, text fields and a
+ * toggle. Falls back gracefully if <ha-form> isn't available.
+ */
+class WollongongSportsgroundCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _schema() {
+    return [
+      {
+        name: "entity",
+        required: true,
+        selector: {
+          entity: {
+            domain: "binary_sensor",
+            integration: "wollongong_sportsgrounds",
+          },
+        },
+      },
+      { name: "name", selector: { text: {} } },
+      { name: "image", selector: { text: {} } },
+      { name: "show_updated", selector: { boolean: {} } },
+    ];
+  }
+
+  _render() {
+    if (!this._hass || !this._config) return;
+
+    if (!this._form) {
+      if (!customElements.get("ha-form")) {
+        // Editor unavailable in this context; users can still use YAML.
+        this.innerHTML =
+          '<p style="padding:8px">Visual editor unavailable here — use the code editor.</p>';
+        return;
+      }
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (s) =>
+        ({
+          entity: "Ground (binary sensor)",
+          name: "Name (optional)",
+          image: "Background image URL (optional)",
+          show_updated: "Show 'last changed' time",
+        })[s.name] || s.name;
+      this._form.computeHelper = (s) =>
+        ({
+          image: "e.g. /local/grounds/cawley.jpg",
+        })[s.name] || "";
+      this._form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: ev.detail.value },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+      this.appendChild(this._form);
+    }
+
+    this._form.hass = this._hass;
+    this._form.schema = this._schema();
+    this._form.data = { show_updated: true, ...this._config };
+  }
+}
+
+customElements.define(
+  "wollongong-sportsground-card-editor",
+  WollongongSportsgroundCardEditor
+);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
