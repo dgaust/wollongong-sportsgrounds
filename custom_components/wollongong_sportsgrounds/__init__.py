@@ -8,6 +8,11 @@ dropped when the last one is removed.
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -15,9 +20,32 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_GROUND, DOMAIN
 from .coordinator import SportsgroundsCoordinator
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
+CARD_FILENAME = "wollongong-sportsground-card.js"
+CARD_URL = f"/{DOMAIN}/{CARD_FILENAME}"
+
 type SportsgroundsConfigEntry = ConfigEntry[SportsgroundsCoordinator]
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve the Lovelace card and load it as a frontend module (once)."""
+    domain_data = hass.data.setdefault(DOMAIN, {"coordinator": None, "entries": set()})
+    if domain_data.get("card_registered"):
+        return
+
+    card_path = Path(__file__).parent / "www" / CARD_FILENAME
+    try:
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(card_path), False)]
+        )
+        add_extra_js_url(hass, CARD_URL)
+        domain_data["card_registered"] = True
+    except (RuntimeError, ValueError) as err:
+        # Non-fatal: the integration still works, the card just isn't auto-served.
+        _LOGGER.warning("Could not register the Lovelace card: %s", err)
 
 
 async def async_setup_entry(
@@ -25,6 +53,8 @@ async def async_setup_entry(
 ) -> bool:
     """Set up a sportsground from a config entry."""
     domain_data = hass.data.setdefault(DOMAIN, {"coordinator": None, "entries": set()})
+
+    await _async_register_card(hass)
 
     slug = entry.data[CONF_GROUND]
     coordinator: SportsgroundsCoordinator | None = domain_data["coordinator"]
