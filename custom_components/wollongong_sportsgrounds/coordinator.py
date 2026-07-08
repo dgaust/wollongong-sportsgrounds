@@ -49,6 +49,34 @@ _LAST_CHANGED_RE = re.compile(
 
 _FETCH_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
+# The council site rejects non-browser clients (HTTP 403), so present as a
+# current desktop Chrome — a full, self-consistent header set (User-Agent,
+# Accept*, Sec-Fetch-* and client hints) rather than a bare User-Agent.
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language": "en-AU,en;q=0.9",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+}
+
+# Minimum gap between successive requests to the council host, so a poll with
+# several configured grounds trickles rather than bursts. Combined with the
+# 15-minute cache this keeps our footprint on their server tiny.
+_REQUEST_DELAY = 1.0
+
 
 @dataclass(frozen=True)
 class Ground:
@@ -116,7 +144,9 @@ async def _async_get_text(hass: HomeAssistant, url: str) -> str:
     """GET a URL and return its text, wrapping errors as UpdateFailed."""
     session = async_get_clientsession(hass)
     try:
-        async with session.get(url, timeout=_FETCH_TIMEOUT) as resp:
+        async with session.get(
+            url, headers=BROWSER_HEADERS, timeout=_FETCH_TIMEOUT
+        ) as resp:
             resp.raise_for_status()
             return await resp.text()
     except (aiohttp.ClientError, asyncio.TimeoutError) as err:
@@ -158,21 +188,20 @@ class SportsgroundsCoordinator(DataUpdateCoordinator[dict[str, Ground]]):
         if self._tz is None:
             self._tz = await dt_util.async_get_time_zone(_COUNCIL_TZ_NAME)
 
-        results = await asyncio.gather(
-            *(self._async_fetch_last_changed(grounds[slug].url) for slug in slugs),
-            return_exceptions=True,
-        )
+        # Fetch detail pages one at a time with a delay between them, rather than
+        # firing them all at once — polite to the host and less bot-like.
         previous = self.data or {}
-        for slug, result in zip(slugs, results):
-            if isinstance(result, tuple):
-                when, raw = result
+        for slug in slugs:
+            await asyncio.sleep(_REQUEST_DELAY)
+            try:
+                when, raw = await self._async_fetch_last_changed(grounds[slug].url)
                 grounds[slug] = replace(
                     grounds[slug], last_changed=when, last_changed_raw=raw
                 )
-            else:
+            except (UpdateFailed, aiohttp.ClientError, asyncio.TimeoutError) as err:
                 # A transient detail-page error: keep the last known value
                 # rather than blanking the timestamp for one poll.
-                _LOGGER.debug("Detail fetch failed for %s: %s", slug, result)
+                _LOGGER.debug("Detail fetch failed for %s: %s", slug, err)
                 if prev := previous.get(slug):
                     grounds[slug] = replace(
                         grounds[slug],
