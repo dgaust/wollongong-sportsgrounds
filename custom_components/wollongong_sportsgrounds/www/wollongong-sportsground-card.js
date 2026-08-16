@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.6.1";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set (full layout). `image: none`
@@ -270,7 +270,12 @@ class WollongongSportsgroundCard extends HTMLElement {
   }
 }
 
-customElements.define("wollongong-sportsground-card", WollongongSportsgroundCard);
+// Guard against double-registration: if this module is loaded more than once
+// (e.g. as both a dashboard resource and the auto-loaded module), a second
+// define() would throw and break the card. Define each element only once.
+if (!customElements.get("wollongong-sportsground-card")) {
+  customElements.define("wollongong-sportsground-card", WollongongSportsgroundCard);
+}
 
 /**
  * Visual editor for the card. Uses HA's built-in <ha-form> with selectors, so
@@ -351,19 +356,23 @@ class WollongongSportsgroundCardEditor extends HTMLElement {
   }
 }
 
-customElements.define(
-  "wollongong-sportsground-card-editor",
-  WollongongSportsgroundCardEditor
-);
+if (!customElements.get("wollongong-sportsground-card-editor")) {
+  customElements.define(
+    "wollongong-sportsground-card-editor",
+    WollongongSportsgroundCardEditor
+  );
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "wollongong-sportsground-card",
-  name: "Wollongong Sportsground Card",
-  description:
-    "Shows a Wollongong sportsground's open/closed status over an optional background image (greyscale when closed).",
-  preview: false,
-});
+if (!window.customCards.some((c) => c.type === "wollongong-sportsground-card")) {
+  window.customCards.push({
+    type: "wollongong-sportsground-card",
+    name: "Wollongong Sportsground Card",
+    description:
+      "Shows a Wollongong sportsground's open/closed status over an optional background image (greyscale when closed).",
+    preview: false,
+  });
+}
 
 // eslint-disable-next-line no-console
 console.info(

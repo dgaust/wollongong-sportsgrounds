@@ -41,8 +41,13 @@ async def _async_register_card(hass: HomeAssistant) -> None:
     try:
         # Serve the whole www folder so both the card JS and its default
         # background image are reachable under /wollongong_sportsgrounds/.
+        # cache_headers=True is deliberate: the URL is version-busted with
+        # ?v=CARD_VERSION below, so caching lets the browser keep the module
+        # ready before Lovelace renders (an uncached re-fetch on every page load
+        # can miss the render and show a "Configuration error"), while a version
+        # bump still forces a re-fetch.
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(WWW_URL_BASE, str(www_dir), False)]
+            [StaticPathConfig(WWW_URL_BASE, str(www_dir), True)]
         )
         # Cache-bust so a card upgrade is picked up without a manual hard-refresh.
         add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")
