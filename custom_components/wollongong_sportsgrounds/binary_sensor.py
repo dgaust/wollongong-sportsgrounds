@@ -46,8 +46,20 @@ class SportsgroundOpenBinarySensor(SportsgroundEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, str] | None:
-        """Expose the raw status text and the ground's page."""
+        """Expose status, the ground's page, and Council's last-changed time.
+
+        The last-changed time is published here (as well as on the dedicated
+        sensor) so an automation can read it from the *same* state that triggers
+        it — e.g. ``trigger.to_state.attributes.status_last_changed`` — with no
+        cross-entity race between the binary sensor and the timestamp sensor
+        updating a moment apart.
+        """
         ground = self.ground
         if ground is None:
             return None
-        return {"status": ground.status, "ground_url": ground.url}
+        attrs = {"status": ground.status, "ground_url": ground.url}
+        if ground.last_changed is not None:
+            attrs["status_last_changed"] = ground.last_changed.isoformat()
+        if ground.last_changed_raw:
+            attrs["status_last_changed_text"] = ground.last_changed_raw
+        return attrs

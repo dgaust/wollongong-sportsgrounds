@@ -18,7 +18,11 @@ For each configured ground you get one device with:
 - **Binary sensor** (the device's primary entity) — `on` when the ground is
   fully **Open**, `off` for anything else (Closed, Partially Closed, Closed at
   request of club, …). Uses the `opening` device class, so the UI shows
-  *Open* / *Closed*. Attributes: `status` (raw text) and `ground_url`.
+  *Open* / *Closed*. Attributes: `status` (raw text), `ground_url`,
+  `status_last_changed` (Council's change time, ISO 8601) and
+  `status_last_changed_text` (Council's raw wording). The last-changed values
+  are duplicated here so automations can read them from the same state that
+  triggers them (see [Automations](#automations)).
 - **Status sensor** — the status text exactly as Council publishes it
   (`Open`, `Closed`, `Partially Closed`, …). Use this when you need the precise
   wording rather than a yes/no.
@@ -30,6 +34,46 @@ For each configured ground you get one device with:
 > The binary sensor is deliberately strict: it's only `on` for a plain "Open".
 > If you want to treat "Partially Closed" as playable, read the **Status
 > sensor** text in your automation instead.
+
+## Automations
+
+To notify on every genuine open/close, include the interim states in the
+trigger `from:` lists — the binary sensor briefly goes `unavailable` during a
+source outage or restart, and a strict `on → off` trigger would miss a change
+that passed through it:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.<your_ground>
+    from: ["off", "unavailable", "unknown"]
+    to: "on"
+    id: Open
+  - trigger: state
+    entity_id: binary_sensor.<your_ground>
+    from: ["on", "unavailable", "unknown"]
+    to: "off"
+    id: Closed
+```
+
+That fires on any real transition. It can also fire once after an outage that
+recovers to the *same* status. To suppress that without a cross-entity race,
+add a condition that reads the last-changed time **from the trigger's own
+state** (only notify if Council changed the status recently):
+
+```yaml
+conditions:
+  - condition: template
+    value_template: >
+      {{ trigger.to_state.attributes.status_last_changed is defined
+         and (now() - as_datetime(trigger.to_state.attributes.status_last_changed))
+             < timedelta(hours=3) }}
+```
+
+Reading `trigger.to_state.attributes.status_last_changed` (rather than the
+separate *Status last changed* sensor) avoids a race: that sensor updates a
+moment after the binary sensor, so a condition reading it at trigger time can
+see a stale value.
 
 ## Installation
 
