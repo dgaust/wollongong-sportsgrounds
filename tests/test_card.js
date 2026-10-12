@@ -226,6 +226,19 @@ const setHass = (c, h) => { try { c.hass = h; return null; } catch (e) { return 
   check("cards being edited are left alone", sent.length, sweepsBefore);
   ctx.document.querySelectorAll = () => [];
 
+  console.log("registry swap");
+  /* Home Assistant's app bundle replaces window.customElements with a scoped
+   * registry polyfill that only knows elements defined through it. A card
+   * file that ran first must re-register there, or Lovelace reports "Custom
+   * element doesn't exist" for every card it creates afterwards. */
+  const nativeReg = ctx.customElements;
+  const scoped = { m: new Map(), get(t) { return this.m.get(t); }, define(t, c) { this.m.set(t, c); } };
+  ctx.customElements = scoped;
+  check("the replacement registry starts without the card", scoped.get("wollongong-sportsground-card"), undefined);
+  intervals.forEach((fn) => fn());
+  check("and has it after the next check", scoped.get("wollongong-sportsground-card"), nativeReg.get("wollongong-sportsground-card"));
+  ctx.customElements = nativeReg;
+
   console.log("versions");
   const cardVer = fs.readFileSync(CARD, "utf8").match(/CARD_VERSION = "([^"]+)"/)[1];
   const constVer = fs.readFileSync(CONST, "utf8").match(/^CARD_VERSION = "([^"]+)"/m)[1];

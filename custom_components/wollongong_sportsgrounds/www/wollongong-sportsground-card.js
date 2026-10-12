@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.7.1";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set (full layout). `image: none`
@@ -529,12 +529,6 @@ class WollongongSportsgroundCard extends HTMLElement {
   }
 }
 
-// Guard against double-registration: if this module is loaded more than once
-// (e.g. as both a dashboard resource and the auto-loaded module), a second
-// define() would throw and break the card. Define each element only once.
-if (!customElements.get("wollongong-sportsground-card")) {
-  customElements.define("wollongong-sportsground-card", WollongongSportsgroundCard);
-}
 
 /**
  * Visual editor for the card. Uses HA's built-in <ha-form> with selectors, so
@@ -615,12 +609,49 @@ class WollongongSportsgroundCardEditor extends HTMLElement {
   }
 }
 
-if (!customElements.get("wollongong-sportsground-card-editor")) {
-  customElements.define(
-    "wollongong-sportsground-card-editor",
-    WollongongSportsgroundCardEditor
-  );
-}
+/*
+ * Register the custom elements with whichever registry is current - and again
+ * whenever it changes.
+ *
+ * Home Assistant's app bundle installs a scoped-custom-element-registry
+ * polyfill that *replaces* window.customElements. The replacement only knows
+ * elements defined through it. This file is auto-loaded at the very start of
+ * the page, so on a phone (cached file, slow app bundle) it can run first and
+ * define its cards on the browser's native registry; once the polyfill takes
+ * over, Lovelace's customElements.get() can't see them, a newly created card
+ * (switching views, returning to the app) shows "Custom element doesn't
+ * exist", and its whenDefined() never resolves. Re-defining on the new
+ * registry fixes that, and resolves the whenDefined Lovelace is waiting on,
+ * so the error cards rebuild themselves. The check is a few map lookups, so
+ * it simply runs twice a second.
+ */
+const defineElements = (definitions) => {
+  const done = new WeakSet();
+  const ensure = () => {
+    const registry = window.customElements;
+    if (!registry || done.has(registry)) return;
+    for (const [tag, cls] of definitions) {
+      try {
+        if (!registry.get(tag)) registry.define(tag, cls);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`${tag}: could not register with the current registry`, err);
+      }
+    }
+    done.add(registry);
+  };
+  ensure();
+  setInterval(ensure, 500);
+  document.addEventListener("visibilitychange", ensure);
+};
+
+// Also guards against double-registration: if this module is loaded more than
+// once (e.g. as both a dashboard resource and the auto-loaded module), a second
+// define() would throw, so each element is only defined where it's missing.
+defineElements([
+  ["wollongong-sportsground-card", WollongongSportsgroundCard],
+  ["wollongong-sportsground-card-editor", WollongongSportsgroundCardEditor],
+]);
 
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "wollongong-sportsground-card")) {
