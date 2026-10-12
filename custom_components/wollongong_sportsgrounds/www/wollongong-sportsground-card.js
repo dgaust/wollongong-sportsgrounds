@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.6.1";
+const CARD_VERSION = "1.6.2";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set (full layout). `image: none`
@@ -74,12 +74,35 @@ class WollongongSportsgroundCard extends HTMLElement {
     this.innerHTML = "";
   }
 
+  /*
+   * This setter must never throw. Home Assistant's card wrapper (hui-card)
+   * catches a throwing `hass` setter and permanently swaps the card for a
+   * message-less error card - "Configuration error" - until the page is
+   * reloaded. Phones reconnect often over mobile data, and a reconnect can
+   * briefly hand over a half-populated hass; one throw then was enough to
+   * break the card for good. So failures are caught here, shown as the card's
+   * own error, and the next update rebuilds from scratch.
+   */
   set hass(hass) {
     this._hass = hass;
-    if (!this._built) {
-      this._build();
+    if (!hass || !this._config) return;
+    try {
+      if (!this._built) {
+        this._build();
+      }
+      this._update();
+    } catch (err) {
+      this._renderError(err);
     }
-    this._update();
+  }
+
+  _renderError(err) {
+    this._built = false;
+    this._els = null;
+    const msg = (err && err.message) || String(err);
+    this.innerHTML = `<ha-card><div style="padding:12px 16px;color:var(--secondary-text-color)">Sportsground card error: ${msg}</div></ha-card>`;
+    // eslint-disable-next-line no-console
+    console.error("wollongong-sportsground-card:", err);
   }
 
   getCardSize() {
@@ -87,6 +110,9 @@ class WollongongSportsgroundCard extends HTMLElement {
   }
 
   _build() {
+    // Clear anything already rendered - an error card from a failed pass, in
+    // particular - so a rebuild replaces it rather than stacking beneath it.
+    this.innerHTML = "";
     const card = document.createElement("ha-card");
     card.className = "wsg";
     card.innerHTML = `
@@ -175,7 +201,7 @@ class WollongongSportsgroundCard extends HTMLElement {
   }
 
   _update() {
-    if (!this._hass || !this._built) return;
+    if (!this._hass || !this._built || !this._hass.states) return;
     const cfg = this._config;
     const els = this._els;
     const st = this._hass.states[cfg.entity];
@@ -241,7 +267,13 @@ class WollongongSportsgroundCard extends HTMLElement {
 
   /**
    * Find the sibling status/last-changed sensors on the same device, unless the
-   * user set them explicitly. Fully guarded so it never throws.
+   * user set them explicitly.
+   *
+   * Must never throw. The loop walks the whole entity registry, and during a
+   * reconnect any entry in it can briefly be null - not just this ground's -
+   * so a bare `entReg[eid].device_id` broke the card whenever one did. Each
+   * entry is null-guarded, and the scan is wrapped so it returns whatever it
+   * found rather than failing the render.
    */
   _resolveSiblings() {
     const cfg = this._config;
@@ -249,22 +281,28 @@ class WollongongSportsgroundCard extends HTMLElement {
     let updatedEid = cfg.updated_entity || null;
     if (statusEid && updatedEid) return { statusEid, updatedEid };
 
-    const hass = this._hass;
-    const entReg = hass && hass.entities;
-    const ent = entReg ? entReg[cfg.entity] : null;
-    const deviceId = ent ? ent.device_id : null;
-    if (!deviceId || !entReg) return { statusEid, updatedEid };
+    try {
+      const hass = this._hass;
+      const entReg = hass && hass.entities;
+      const ent = entReg ? entReg[cfg.entity] : null;
+      const deviceId = ent ? ent.device_id : null;
+      if (!deviceId || !entReg) return { statusEid, updatedEid };
 
-    for (const eid in entReg) {
-      if (!eid.startsWith("sensor.")) continue;
-      if (entReg[eid].device_id !== deviceId) continue;
-      const s = hass.states[eid];
-      const dc = s && s.attributes ? s.attributes.device_class : undefined;
-      if (dc === "timestamp") {
-        if (!updatedEid) updatedEid = eid;
-      } else if (!statusEid) {
-        statusEid = eid;
+      for (const eid in entReg) {
+        if (!eid.startsWith("sensor.")) continue;
+        const reg = entReg[eid];
+        if (!reg || reg.device_id !== deviceId) continue;
+        const s = hass.states ? hass.states[eid] : null;
+        const dc = s && s.attributes ? s.attributes.device_class : undefined;
+        if (dc === "timestamp") {
+          if (!updatedEid) updatedEid = eid;
+        } else if (!statusEid) {
+          statusEid = eid;
+        }
       }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("wollongong-sportsground-card: sibling lookup failed", err);
     }
     return { statusEid, updatedEid };
   }
