@@ -135,6 +135,14 @@ cache-busted per version, so upgrades are picked up without a manual
 hard-refresh; you can confirm the `WOLLONGONG-SPORTSGROUND-CARD` version banner
 in the browser console.
 
+**If the card shows "Configuration error".** Home Assistant hides the reason
+outside edit mode, so the card reports it to the Home Assistant log instead:
+look under **Settings → System → Logs** for the logger
+`custom_components.wollongong_sportsgrounds.card`. The entry includes the real
+error, the card version and the device/browser. The card also retries a card
+file that failed to load (common when a phone app resumes before its connection
+is back) and rebuilds itself if Home Assistant swapped it for an error card.
+
 ## How it works
 
 - All configured grounds share **one** coordinator. Each poll (every 15

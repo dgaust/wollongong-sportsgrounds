@@ -18,7 +18,7 @@
  *   updated_entity: sensor.cawley_park_status_last_changed
  */
 
-const CARD_VERSION = "1.6.2";
+const CARD_VERSION = "1.7.0";
 
 // Shipped with the integration and served from the same static route. Used as
 // the background when the card has no `image` set (full layout). `image: none`
@@ -42,6 +42,190 @@ const FIELD_SVG =
   "</svg>";
 const FIELD_IMAGE = "data:image/svg+xml," + encodeURIComponent(FIELD_SVG);
 
+/* ------------------------------------------------------------------ *
+ * Failure reporting and recovery
+ * ------------------------------------------------------------------ */
+
+/*
+ * Outside edit mode Home Assistant shows a broken card as a bare
+ * "Configuration error" and keeps the reason to itself (the message is only
+ * rendered in edit mode, and only logged to the browser console). On a phone
+ * that leaves nothing to go on. So this module reports, to Home Assistant's
+ * own log (Settings > System > Logs, logger "custom_components.wollongong_sportsgrounds.card"):
+ *
+ *   - any console error that names one of these cards - Home Assistant logs
+ *     every card it gives up on there, with the exception;
+ *   - any of these cards found replaced by Home Assistant's error card, with
+ *     the hidden message read off that error card;
+ *   - a card file that only loaded after failed attempts (the loader leaves a
+ *     note on window for this module to pick up).
+ *
+ * A card found replaced is also rebuilt through the card wrapper's public
+ * load(), a few times at most, so a one-off failure doesn't stay on screen
+ * until the app is restarted. Everything here is best-effort and swallows its
+ * own errors: diagnostics must never be what breaks a dashboard.
+ */
+const GUARD = (() => {
+  const LOGGER = "custom_components.wollongong_sportsgrounds.card";
+  const TAG_PREFIX = "wollongong-sportsground-card";
+  const LOAD_TAG = "wollongong-sportsground-card";
+  /* Loaded twice (a leftover dashboard resource as well as the auto-load)?
+   * Install once, or every error would be reported twice. */
+  const KEY = `__cardGuard_${TAG_PREFIX}`;
+  if (window[KEY]) return window[KEY];
+  const MAX_REPORTS = 25;
+  const REBUILD_GAP_MS = 20000;
+  const MAX_REBUILDS = 5;
+  const sent = new Set();
+  const queue = [];
+  const rebuilds = new WeakMap();
+  let flushTimer = 0;
+
+  const appHass = () => {
+    const ha = document.querySelector("home-assistant");
+    return ha ? ha.hass : null;
+  };
+
+  const context = () =>
+    `[card ${CARD_VERSION}; up ${Math.round(performance.now() / 1000)}s; ` +
+    `online=${navigator.onLine}; visible=${!document.hidden}; ` +
+    `${location.pathname}; ${navigator.userAgent}]`;
+
+  /* Raw call_service over the socket rather than hass.callService, which
+   * can raise a toast of its own when the call fails. */
+  const flush = () => {
+    clearTimeout(flushTimer);
+    flushTimer = 0;
+    try {
+      const hass = appHass();
+      if (!hass || !hass.connected || !hass.callWS) {
+        if (queue.length) flushTimer = setTimeout(flush, 5000);
+        return;
+      }
+      while (queue.length) {
+        const [level, message] = queue.shift();
+        hass
+          .callWS({
+            type: "call_service",
+            domain: "system_log",
+            service: "write",
+            service_data: { logger: LOGGER, level, message },
+          })
+          .catch(() => {});
+      }
+    } catch (_err) {
+      /* Reporting is best-effort. */
+    }
+  };
+
+  /* `key` decides what counts as the same problem: an error's stack differs
+   * by call site, so the console path keys on name + message alone. */
+  const report = (level, text, key = text) => {
+    if (sent.has(key) || sent.size >= MAX_REPORTS) return;
+    sent.add(key);
+    queue.push([level, `${text} ${context()}`]);
+    flush();
+  };
+
+  /* Duck-typed: an Error from another realm fails instanceof. */
+  const isError = (arg) =>
+    !!arg && typeof arg === "object" && typeof arg.message === "string" && "stack" in arg;
+
+  const describe = (arg) => {
+    if (isError(arg)) {
+      const stack = (arg.stack || "").split("\n").slice(0, 6).join("\n");
+      return stack.includes(arg.message) ? stack : `${arg.name}: ${arg.message}\n${stack}`;
+    }
+    if (typeof arg === "string") return arg;
+    try {
+      return JSON.stringify(arg).slice(0, 500);
+    } catch (_err) {
+      return String(arg);
+    }
+  };
+
+  const ours = (type) => typeof type === "string" && type.startsWith(`custom:${TAG_PREFIX}`);
+
+  /* Home Assistant logs a card it gives up on as console.error(type, err)
+   * (or "card", type, err); the cards log their own failures the same way. */
+  const consoleError = console.error;
+  console.error = function (...args) {
+    try {
+      if (args.some((a) => typeof a === "string" && a.includes(TAG_PREFIX))) {
+        const key = args.map((a) => (isError(a) ? `${a.name}: ${a.message}` : describe(a))).join(" ");
+        report("error", `Console error: ${args.map(describe).join(" ")}`, key);
+      }
+    } catch (_err) {
+      /* never let diagnostics break logging */
+    }
+    return consoleError.apply(this, args);
+  };
+
+  const huiCards = (root, out) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.localName === "hui-card") out.push(el);
+      if (el.shadowRoot) huiCards(el.shadowRoot, out);
+    }
+    return out;
+  };
+
+  const sweep = () => {
+    try {
+      if (document.hidden) return;
+      for (const wrapper of huiCards(document, [])) {
+        const type = wrapper.config && wrapper.config.type;
+        if (!ours(type) || wrapper.preview) continue;
+        const el = wrapper._element || wrapper.firstElementChild;
+        if (!el || el.localName !== "hui-error-card") continue;
+
+        const message = (el._config && el._config.message) ||
+          "no message (Home Assistant replaces the card this way when a property setter throws)";
+        report("error", `${type} was showing Home Assistant's error card: ${message}`);
+
+        /* Rebuild only once our element exists - otherwise the loader is
+         * still working on it and Lovelace will rebuild by itself. */
+        const tag = type.slice("custom:".length);
+        const seen = rebuilds.get(wrapper) || { count: 0, last: 0 };
+        const now = Date.now();
+        if (!customElements.get(tag) || seen.count >= MAX_REBUILDS || now - seen.last < REBUILD_GAP_MS) {
+          continue;
+        }
+        rebuilds.set(wrapper, { count: seen.count + 1, last: now });
+        if (typeof wrapper.load === "function") {
+          wrapper.load();
+          report("warning", `${type} rebuilt after Home Assistant's error card (rebuild ${seen.count + 1})`);
+        }
+      }
+    } catch (err) {
+      report("warning", `Card check failed: ${describe(err)}`);
+    }
+  };
+
+  /* The loader notes failed attempts on window before this file ran. */
+  try {
+    const note = window[`__cardLoad_${LOAD_TAG}`];
+    if (note && note.failures) {
+      report(
+        "warning",
+        `Card file needed ${note.failures + 1} attempts to load ` +
+          `(${Math.round((performance.now() - note.since) / 1000)}s after the first failure; ` +
+          `last error: ${note.last})`
+      );
+    }
+  } catch (_err) {
+    /* best-effort */
+  }
+
+  setInterval(sweep, 10000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) setTimeout(sweep, 2000);
+  });
+  setTimeout(sweep, 5000);
+
+  window[KEY] = { report, describe };
+  return window[KEY];
+})();
+
 class WollongongSportsgroundCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("wollongong-sportsground-card-editor");
@@ -62,34 +246,74 @@ class WollongongSportsgroundCard extends HTMLElement {
     return { entity, image: "", show_updated: true };
   }
 
+  /*
+   * Lifecycle, as Home Assistant's custom card docs lay it out:
+   *
+   *   setConfig  validate and store the config - throw only for a config that
+   *              is genuinely invalid (HA shows that message in the editor);
+   *   hass       store the latest state - called on every state change;
+   *   render     done separately, never inside either call.
+   *
+   * Rendering is queued as a microtask rather than run inside the setter. Home
+   * Assistant's card wrapper treats an exception from `hass` (or `setConfig`)
+   * as fatal and swaps the card for a permanent "Configuration error" until the
+   * page reloads, so nothing that can fail runs there at all. The queue also
+   * coalesces the setConfig + hass pair a new card receives into one render.
+   */
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._queued = false;
+    this._built = false;
+  }
+
   setConfig(config) {
     if (!config || !config.entity) {
       throw new Error("Please define 'entity' (the ground's binary_sensor).");
     }
-    if (!config.entity.startsWith("binary_sensor.")) {
+    if (typeof config.entity !== "string" || !config.entity.startsWith("binary_sensor.")) {
       throw new Error("'entity' should be the ground's binary_sensor (open/closed).");
     }
     this._config = { show_updated: true, ...config };
-    this._built = false;
-    this.innerHTML = "";
+    this._queueRender();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._queueRender();
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  connectedCallback() {
+    this._queueRender();
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  _queueRender() {
+    if (this._queued) return;
+    this._queued = true;
+    Promise.resolve().then(() => {
+      this._queued = false;
+      this._render();
+    });
   }
 
   /*
-   * This setter must never throw. Home Assistant's card wrapper (hui-card)
-   * catches a throwing `hass` setter and permanently swaps the card for a
-   * message-less error card - "Configuration error" - until the page is
-   * reloaded. Phones reconnect often over mobile data, and a reconnect can
-   * briefly hand over a half-populated hass; one throw then was enough to
-   * break the card for good. So failures are caught here, shown as the card's
-   * own error, and the next update rebuilds from scratch.
+   * The one place the card touches its DOM. Any failure is caught and shown
+   * as the card's own error (and reported to Home Assistant's log); _built is
+   * cleared so the next update rebuilds from scratch rather than patching a
+   * DOM that never finished.
    */
-  set hass(hass) {
-    this._hass = hass;
-    if (!hass || !this._config) return;
+  _render() {
+    if (!this._config || !this._hass) return;
     try {
-      if (!this._built) {
-        this._build();
-      }
+      if (!this._built) this._build();
       this._update();
     } catch (err) {
       this._renderError(err);
@@ -100,23 +324,18 @@ class WollongongSportsgroundCard extends HTMLElement {
     this._built = false;
     this._els = null;
     const msg = (err && err.message) || String(err);
-    this.innerHTML = `<ha-card><div style="padding:12px 16px;color:var(--secondary-text-color)">Sportsground card error: ${msg}</div></ha-card>`;
+    this.shadowRoot.innerHTML = `<ha-card><div style="padding:12px 16px;color:var(--secondary-text-color)">Sportsground card error: ${msg}</div></ha-card>`;
     // eslint-disable-next-line no-console
     console.error("wollongong-sportsground-card:", err);
   }
 
-  getCardSize() {
-    return 3;
-  }
-
   _build() {
-    // Clear anything already rendered - an error card from a failed pass, in
-    // particular - so a rebuild replaces it rather than stacking beneath it.
-    this.innerHTML = "";
-    const card = document.createElement("ha-card");
-    card.className = "wsg";
-    card.innerHTML = `
+    // Replaces whatever was there - an error card from a failed pass, in
+    // particular - rather than stacking beneath it.
+    const root = this.shadowRoot;
+    root.innerHTML = `
       <style>
+        :host { display: block; }
         ha-card.wsg {
           position: relative;
           overflow: hidden;
@@ -180,16 +399,18 @@ class WollongongSportsgroundCard extends HTMLElement {
           text-overflow: ellipsis;
         }
       </style>
-      <div class="wsg-bg"></div>
-      <div class="wsg-bar">
-        <div class="wsg-text">
-          <div class="wsg-name"></div>
-          <div class="wsg-updated"></div>
+      <ha-card class="wsg">
+        <div class="wsg-bg"></div>
+        <div class="wsg-bar">
+          <div class="wsg-text">
+            <div class="wsg-name"></div>
+            <div class="wsg-updated"></div>
+          </div>
+          <span class="wsg-badge"></span>
         </div>
-        <span class="wsg-badge"></span>
-      </div>
+      </ha-card>
     `;
-    this.appendChild(card);
+    const card = root.querySelector("ha-card");
     this._els = {
       card,
       bg: card.querySelector(".wsg-bg"),
@@ -201,7 +422,7 @@ class WollongongSportsgroundCard extends HTMLElement {
   }
 
   _update() {
-    if (!this._hass || !this._built || !this._hass.states) return;
+    if (!this._built || !this._hass.states) return;
     const cfg = this._config;
     const els = this._els;
     const st = this._hass.states[cfg.entity];
