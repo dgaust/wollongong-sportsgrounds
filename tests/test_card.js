@@ -47,11 +47,8 @@ class FakeHTMLElement {
   attachShadow() { this.shadowRoot = el("#shadow"); return this.shadowRoot; }
 }
 
-/* Timers are captured, not run, so the guard's periodic check can be fired
- * by hand. */
+/* Timers are captured, not run, so a queued error report can be inspected. */
 const timers = [];
-const intervals = [];
-const app = { hass: null };
 const consoleErrors = [];
 const ctx = vm.createContext({
   console: { info() {}, warn() {}, error: (...a) => consoleErrors.push(a) },
@@ -67,7 +64,6 @@ const ctx = vm.createContext({
     hidden: false,
     createElement: () => el(),
     addEventListener() {},
-    querySelector: (sel) => (sel === "home-assistant" ? app : null),
     querySelectorAll: () => [],
   },
   navigator: { onLine: true, userAgent: "test-agent" },
@@ -75,7 +71,6 @@ const ctx = vm.createContext({
   performance: { now: () => 12000 },
   setTimeout: (fn) => { timers.push(fn); return timers.length; },
   clearTimeout() {},
-  setInterval: (fn) => { intervals.push(fn); return intervals.length; },
 });
 ctx.window = ctx;
 vm.runInContext(fs.readFileSync(CARD, "utf8"), ctx);
@@ -181,63 +176,19 @@ const setHass = (c, h) => { try { c.hass = h; return null; } catch (e) { return 
     !/card error/i.test(flaky.shadowRoot.innerHTML) && flaky.shadowRoot.innerHTML.includes("wsg-bar"));
 
   console.log("reporting");
-  const sent = [];
-  app.hass = {
-    connected: true,
-    callWS: (msg) => { sent.push(msg); return Promise.resolve(); },
-  };
-  ctx.console.error("wollongong-sportsground-card:", new Error("something broke"));
-  const report = sent.find((m) => m.service_data.message.includes("something broke"));
-  assert("a card error is written to Home Assistant's log", !!report);
-  check("through system_log.write", report && `${report.domain}.${report.service}`, "system_log.write");
-  check("under the integration's logger", report && report.service_data.logger,
-    "custom_components.wollongong_sportsgrounds.card");
-  assert("with the card version and device", report && report.service_data.message.includes("test-agent"));
-  ctx.console.error("custom:wollongong-sportsground-card", new Error("something broke"));
-  ctx.console.error("wollongong-sportsground-card:", new Error("something broke"));
-  check("the same error is reported once", sent.filter((m) => m.service_data.message.includes("Console error: wollongong-sportsground-card: Error: something broke")).length, 1);
-  const before = sent.length;
-  ctx.console.error("some other card", new Error("not ours"));
-  check("other cards' errors are left alone", sent.length, before);
-  check("console.error still logs", consoleErrors.length > 0, true);
-
-  console.log("error-card sweep");
-  /* Home Assistant's wrapper with our card swapped for its error card. */
-  let loads = 0;
-  const errorCard = { localName: "hui-error-card", _config: { type: "error", message: "the hidden reason" } };
-  const wrapper = {
-    localName: "hui-card",
-    config: { type: "custom:wollongong-sportsground-card", entity: "binary_sensor.cawley" },
-    preview: false,
-    _element: errorCard,
-    load() { loads++; },
-  };
-  ctx.document.querySelectorAll = () => [wrapper];
-  intervals.forEach((fn) => fn());
-  assert("the hidden message is reported",
-    sent.some((m) => m.service_data.message.includes("the hidden reason")));
-  check("and the card is rebuilt", loads, 1);
-  intervals.forEach((fn) => fn());
-  check("but not again straight away", loads, 1);
-  wrapper.preview = true;
-  wrapper._element = { ...errorCard };
-  const sweepsBefore = sent.length;
-  intervals.forEach((fn) => fn());
-  check("cards being edited are left alone", sent.length, sweepsBefore);
-  ctx.document.querySelectorAll = () => [];
-
-  console.log("registry swap");
-  /* Home Assistant's app bundle replaces window.customElements with a scoped
-   * registry polyfill that only knows elements defined through it. A card
-   * file that ran first must re-register there, or Lovelace reports "Custom
-   * element doesn't exist" for every card it creates afterwards. */
-  const nativeReg = ctx.customElements;
-  const scoped = { m: new Map(), get(t) { return this.m.get(t); }, define(t, c) { this.m.set(t, c); } };
-  ctx.customElements = scoped;
-  check("the replacement registry starts without the card", scoped.get("wollongong-sportsground-card"), undefined);
-  intervals.forEach((fn) => fn());
-  check("and has it after the next check", scoped.get("wollongong-sportsground-card"), nativeReg.get("wollongong-sportsground-card"));
-  ctx.customElements = nativeReg;
+  /* A caught render error is re-thrown on a fresh task so Home Assistant's
+   * frontend logs it - once per message, however often the card re-renders. */
+  timers.length = 0;
+  const noisy = make();
+  noisy._update = () => { throw new Error("render broke"); };
+  noisy.hass = good;
+  await flush();
+  noisy.hass = good;
+  await flush();
+  check("one report is queued for a repeated failure", timers.length, 1);
+  let rethrown = null;
+  try { timers[0](); } catch (e) { rethrown = e; }
+  check("and it re-throws the original error", rethrown && rethrown.message, "render broke");
 
   console.log("versions");
   const cardVer = fs.readFileSync(CARD, "utf8").match(/CARD_VERSION = "([^"]+)"/)[1];

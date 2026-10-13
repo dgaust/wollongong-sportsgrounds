@@ -104,8 +104,9 @@ the right. When the ground is not open, **only the background turns greyscale** 
 the bar, text, and pill keep their colour. A `compact` option gives a shorter
 single-row card over a generated soccer pitch.
 
-The card's JavaScript is served and auto-loaded by the integration (no manual
-resource needed on a normal setup). It follows your Home Assistant theme — the
+The card's JavaScript is served by the integration and registered as a
+dashboard resource for you (no manual resource needed unless your resources are
+managed in YAML, in which case the log names the one to add). It follows your Home Assistant theme — the
 open/closed badge uses your **primary**/**accent** colours and the text uses the
 **primary**/**secondary** text colours (with green/red as fallbacks). It has a
 **visual editor** — add it from the dashboard card picker and pick a ground — or
@@ -135,13 +136,8 @@ cache-busted per version, so upgrades are picked up without a manual
 hard-refresh; you can confirm the `WOLLONGONG-SPORTSGROUND-CARD` version banner
 in the browser console.
 
-**If the card shows "Configuration error".** Home Assistant hides the reason
-outside edit mode, so the card reports it to the Home Assistant log instead:
-look under **Settings → System → Logs** for the logger
-`custom_components.wollongong_sportsgrounds.card`. The entry includes the real
-error, the card version and the device/browser. The card also retries a card
-file that failed to load (common when a phone app resumes before its connection
-is back) and rebuilds itself if Home Assistant swapped it for an error card.
+If the card ever fails to render, it says so on the card, and the error is in
+the Home Assistant log (**Settings → System → Logs**, from the frontend).
 
 ## How it works
 
